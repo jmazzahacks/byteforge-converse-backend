@@ -6,8 +6,8 @@ Creates the byteforge_converse database and user, grants permissions, and
 applies database/schema.sql.
 
 Environment variables (loaded from .env in the backend repo root):
-  POSTGRES_HOST                       PostgreSQL host (default: localhost)
-  POSTGRES_PORT                       PostgreSQL port (default: 5432)
+  BYTEFORGE_CONVERSE_DB_HOST          PostgreSQL host (default: localhost) — same var the app uses
+  BYTEFORGE_CONVERSE_DB_PORT          PostgreSQL port (default: 5432)
   BYTEFORGE_CONVERSE_DB_NAME          Application database name (default: byteforge_converse)
   BYTEFORGE_CONVERSE_DB_USER          Application database user (default: byteforge_converse)
   BYTEFORGE_CONVERSE_DB_PASSWORD      Application database user password (REQUIRED)
@@ -42,8 +42,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    pg_host = os.environ.get("POSTGRES_HOST", "localhost")
-    pg_port = os.environ.get("POSTGRES_PORT", "5432")
+    pg_host = os.environ.get("BYTEFORGE_CONVERSE_DB_HOST", "localhost")
+    pg_port = os.environ.get("BYTEFORGE_CONVERSE_DB_PORT", "5432")
     pg_user = args.pg_user
     pg_password = args.pg_password
 

@@ -5,7 +5,7 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from werkzeug.exceptions import HTTPException
 
-from common import service_manager
+from common import service_manager, require_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,8 @@ class ChatResource(MethodView):
             }
         """
         try:
+            require_uuid(conversation_id, "Conversation")
+
             data = request.get_json()
             if not data:
                 abort(400, message="Request body is required")
@@ -37,20 +39,16 @@ class ChatResource(MethodView):
 
             user_content = str(data["content"])
 
-            db = service_manager.get_database()
-            if not db.get_conversation(conversation_id):
-                abort(404, message=f"Conversation not found: {conversation_id}")
-
-            assistant_message = service_manager.get_chat_service().send_turn(
-                conversation_id, user_content
-            )
+            chat_service = service_manager.get_chat_service()
+            try:
+                assistant_message = chat_service.send_turn(conversation_id, user_content)
+            except ValueError as e:
+                # send_turn raises ValueError only when the conversation is missing.
+                abort(404, message=str(e))
 
             return jsonify(assistant_message.to_dict()), 201
         except HTTPException:
             raise
-        except ValueError as e:
-            logger.warning(f"Validation error: {e}")
-            abort(400, message=str(e))
         except Exception as e:
             logger.exception(f"Error handling chat turn: {e}")
             abort(500, message="Internal server error")

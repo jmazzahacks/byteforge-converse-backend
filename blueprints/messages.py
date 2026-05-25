@@ -5,7 +5,7 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from werkzeug.exceptions import HTTPException
 
-from common import service_manager
+from common import service_manager, require_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ blp = Blueprint(
 class MessageListResource(MethodView):
     def get(self, conversation_id: str):
         try:
+            require_uuid(conversation_id, "Conversation")
             limit = request.args.get("limit", 100, type=int)
             offset = request.args.get("offset", 0, type=int)
 
@@ -43,6 +44,7 @@ class MessageListResource(MethodView):
 
     def post(self, conversation_id: str):
         try:
+            require_uuid(conversation_id, "Conversation")
             data = request.get_json()
             if not data:
                 abort(400, message="Request body is required")

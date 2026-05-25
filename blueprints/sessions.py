@@ -6,7 +6,7 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from werkzeug.exceptions import HTTPException
 
-from common import service_manager, get_user_id
+from common import service_manager, get_user_id, require_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ class SessionListResource(MethodView):
 class SessionResource(MethodView):
     def get(self, session_id: str):
         try:
+            require_uuid(session_id, "Session")
             db = service_manager.get_database()
             item = db.get_session(session_id)
 
@@ -85,6 +86,7 @@ class SessionResource(MethodView):
 
     def delete(self, session_id: str):
         try:
+            require_uuid(session_id, "Session")
             db = service_manager.get_database()
             revoked = db.delete_session(session_id)
 

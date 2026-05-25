@@ -7,7 +7,7 @@ from werkzeug.exceptions import HTTPException
 
 from byteforge_converse_models import ConversationCreate
 
-from common import service_manager, get_user_id
+from common import service_manager, get_user_id, require_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,7 @@ class ConversationListResource(MethodView):
 class ConversationResource(MethodView):
     def get(self, conversation_id: str):
         try:
+            require_uuid(conversation_id, "Conversation")
             db = service_manager.get_database()
             item = db.get_conversation(conversation_id)
 
@@ -93,6 +94,7 @@ class ConversationResource(MethodView):
 
     def delete(self, conversation_id: str):
         try:
+            require_uuid(conversation_id, "Conversation")
             db = service_manager.get_database()
             deleted = db.delete_conversation(conversation_id)
 
