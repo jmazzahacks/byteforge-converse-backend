@@ -5,12 +5,30 @@ Provides centralized initialization of database connections, LLM clients,
 and other shared resources used across blueprints.
 """
 
-import os
 import logging
 from typing import Optional
 
+from flask import Request
+from byteforge_converse_core import Database, DatabaseConfig
+
 
 logger = logging.getLogger(__name__)
+
+
+def get_user_id(req: Request) -> Optional[str]:
+    """
+    Resolve the calling user's id.
+
+    Auth is delegated upstream: prefer the gateway-injected `X-User-Id`
+    header. As a development fallback (no gateway in front), accept a
+    `user_id` in the JSON body or query string.
+    """
+    header_user_id = req.headers.get("X-User-Id")
+    if header_user_id:
+        return header_user_id
+
+    body = req.get_json(silent=True) or {}
+    return body.get("user_id") or req.args.get("user_id")
 
 
 class ServiceManager:
@@ -33,32 +51,19 @@ class ServiceManager:
         if self._initialized:
             return
 
-        self._db = None
+        self._db: Optional[Database] = None
         self._initialized = True
         logger.info("ServiceManager initialized")
 
-    def get_database(self):
+    def get_database(self) -> Database:
         """
-        Get database connection instance (lazy initialization).
+        Get the database instance (lazy initialization).
+
+        The connection pool is created on first use so it is built inside the
+        gunicorn worker (post-fork), not in the master process at import time.
         """
         if self._db is None:
-            # TODO: replace with the real Database class once postgres-setup
-            # has been run and a database module exists.
-            db_host = os.environ.get("BYTEFORGE_CONVERSE_DB_HOST", "localhost")
-            db_name = os.environ.get("BYTEFORGE_CONVERSE_DB_NAME", "byteforge_converse")
-            db_user = os.environ.get("BYTEFORGE_CONVERSE_DB_USER", "byteforge_converse")
-            db_passwd = os.environ.get("BYTEFORGE_CONVERSE_DB_PASSWORD")
-
-            if not db_passwd:
-                raise ValueError(
-                    "BYTEFORGE_CONVERSE_DB_PASSWORD environment variable required"
-                )
-
-            raise NotImplementedError(
-                "Database class not yet wired — run the postgres-setup skill "
-                "and import the resulting Database here."
-            )
-
+            self._db = Database(DatabaseConfig.from_env())
         return self._db
 
 

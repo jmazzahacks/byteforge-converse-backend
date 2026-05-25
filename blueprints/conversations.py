@@ -3,8 +3,9 @@ import logging
 from flask import request, jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from werkzeug.exceptions import HTTPException
 
-from byteforge_converse_models import Conversation
+from common import service_manager, get_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +21,23 @@ blp = Blueprint(
 class ConversationListResource(MethodView):
     def get(self):
         try:
+            user_id = get_user_id(request)
+            if not user_id:
+                abort(400, message="user_id is required (X-User-Id header or ?user_id=)")
+
             limit = request.args.get("limit", 100, type=int)
             offset = request.args.get("offset", 0, type=int)
 
-            # TODO: fetch conversations for the calling user via core service
-            items: list[Conversation] = []
+            db = service_manager.get_database()
+            items = db.list_conversations(user_id, limit=limit, offset=offset)
 
             return jsonify({
                 "data": [item.to_dict() for item in items],
                 "limit": limit,
                 "offset": offset,
             })
+        except HTTPException:
+            raise
         except ValueError as e:
             logger.warning(f"Bad request: {e}")
             abort(400, message=str(e))
@@ -44,11 +51,20 @@ class ConversationListResource(MethodView):
             if not data:
                 abort(400, message="Request body is required")
 
-            item = Conversation.from_dict(data)
+            user_id = get_user_id(request)
+            if not user_id:
+                abort(400, message="user_id is required (X-User-Id header or body)")
 
-            # TODO: persist conversation via core service
+            title = data.get("title")
+            if not title:
+                abort(400, message="title is required")
+
+            db = service_manager.get_database()
+            item = db.create_conversation(user_id=user_id, title=str(title))
 
             return jsonify(item.to_dict()), 201
+        except HTTPException:
+            raise
         except ValueError as e:
             logger.warning(f"Validation error: {e}")
             abort(400, message=str(e))
@@ -61,22 +77,30 @@ class ConversationListResource(MethodView):
 class ConversationResource(MethodView):
     def get(self, conversation_id: str):
         try:
-            # TODO: fetch conversation by id via core service
-            item = None
+            db = service_manager.get_database()
+            item = db.get_conversation(conversation_id)
 
             if not item:
                 abort(404, message=f"Conversation not found: {conversation_id}")
 
             return jsonify(item.to_dict())
+        except HTTPException:
+            raise
         except Exception as e:
             logger.exception(f"Error fetching conversation: {e}")
             abort(500, message="Internal server error")
 
     def delete(self, conversation_id: str):
         try:
-            # TODO: delete conversation via core service
+            db = service_manager.get_database()
+            deleted = db.delete_conversation(conversation_id)
+
+            if not deleted:
+                abort(404, message=f"Conversation not found: {conversation_id}")
 
             return jsonify({"message": "Deleted"})
+        except HTTPException:
+            raise
         except Exception as e:
             logger.exception(f"Error deleting conversation: {e}")
             abort(500, message="Internal server error")
