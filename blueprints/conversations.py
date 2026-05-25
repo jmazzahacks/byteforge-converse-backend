@@ -5,6 +5,8 @@ from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from werkzeug.exceptions import HTTPException
 
+from byteforge_converse_models import ConversationCreate
+
 from common import service_manager, get_user_id
 
 logger = logging.getLogger(__name__)
@@ -55,12 +57,11 @@ class ConversationListResource(MethodView):
             if not user_id:
                 abort(400, message="user_id is required (X-User-Id header or body)")
 
-            title = data.get("title")
-            if not title:
-                abort(400, message="title is required")
+            data["user_id"] = user_id
+            create = ConversationCreate.from_dict(data)
 
             db = service_manager.get_database()
-            item = db.create_conversation(user_id=user_id, title=str(title))
+            item = db.create_conversation(create)
 
             return jsonify(item.to_dict()), 201
         except HTTPException:

@@ -3,6 +3,9 @@ import logging
 from flask import request, jsonify
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from werkzeug.exceptions import HTTPException
+
+from common import service_manager
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +37,17 @@ class ChatResource(MethodView):
 
             user_content = str(data["content"])
 
-            # TODO: delegate to core service: append user message, call LLM,
-            # persist assistant reply, return assistant Message.to_dict()
-            _ = (conversation_id, user_content)
+            db = service_manager.get_database()
+            if not db.get_conversation(conversation_id):
+                abort(404, message=f"Conversation not found: {conversation_id}")
 
-            return jsonify({
-                "message": "Not yet implemented — core LLM orchestration pending",
-            }), 501
+            assistant_message = service_manager.get_chat_service().send_turn(
+                conversation_id, user_content
+            )
+
+            return jsonify(assistant_message.to_dict()), 201
+        except HTTPException:
+            raise
         except ValueError as e:
             logger.warning(f"Validation error: {e}")
             abort(400, message=str(e))

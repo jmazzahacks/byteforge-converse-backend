@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 from flask import Request
-from byteforge_converse_core import Database, DatabaseConfig
+from byteforge_converse_core import Database, DatabaseConfig, ChatService, LLMConfig
 
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ class ServiceManager:
             return
 
         self._db: Optional[Database] = None
+        self._chat_service: Optional[ChatService] = None
         self._initialized = True
         logger.info("ServiceManager initialized")
 
@@ -65,6 +66,17 @@ class ServiceManager:
         if self._db is None:
             self._db = Database(DatabaseConfig.from_env())
         return self._db
+
+    def get_chat_service(self) -> ChatService:
+        """
+        Get the chat orchestration service (lazy initialization).
+
+        Built on first use so the OpenRouter client and DB pool are created
+        inside the gunicorn worker, not the master process.
+        """
+        if self._chat_service is None:
+            self._chat_service = ChatService(self.get_database(), LLMConfig.from_env())
+        return self._chat_service
 
 
 service_manager = ServiceManager()

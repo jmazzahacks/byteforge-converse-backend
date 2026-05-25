@@ -45,9 +45,14 @@ gunicorn -w 4 -b 0.0.0.0:5252 'byteforge_converse_backend:create_app()'
 
 **Database:**
 - `BYTEFORGE_CONVERSE_DB_HOST` — host (default: `localhost`)
+- `BYTEFORGE_CONVERSE_DB_PORT` — port (default: `5432`)
 - `BYTEFORGE_CONVERSE_DB_NAME` — database name (default: `byteforge_converse`)
 - `BYTEFORGE_CONVERSE_DB_USER` — user (default: `byteforge_converse`)
 - `BYTEFORGE_CONVERSE_DB_PASSWORD` — **required**
+
+**LLM (OpenRouter proxy):**
+- `BYTEFORGE_CONVERSE_OPENROUTER_API_KEY` — **required** for the chat turn
+- `BYTEFORGE_CONVERSE_LLM_MODEL` — default model (default: `anthropic/claude-3.5-sonnet`); overridable per-conversation
 
 **Other:**
 - `ALLOWED_ORIGINS` — comma-separated CORS allow-list for embedding frontends
