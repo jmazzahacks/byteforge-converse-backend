@@ -1,0 +1,18 @@
+# Flask and API framework
+Flask
+flask-smorest
+flask-cors
+
+# Environment variable management
+python-dotenv
+
+# Production server
+gunicorn
+
+# Database
+psycopg2-binary
+
+# Internal libraries (public GitHub repos — no token required)
+byteforge-converse-models @ git+https://github.com/jmazzahacks/byteforge-converse-models.git
+byteforge-converse-core @ git+https://github.com/jmazzahacks/byteforge-converse-core.git
+byteforge-loki-logging @ git+https://github.com/jmazzahacks/byteforge-loki-logging.git
