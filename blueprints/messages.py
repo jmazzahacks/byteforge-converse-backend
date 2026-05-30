@@ -57,6 +57,10 @@ class MessageListResource(MethodView):
                 abort(400, message="content is required")
 
             token_count = data.get("token_count")
+            tool_calls = data.get("tool_calls")
+            tool_call_id = data.get("tool_call_id")
+            if tool_calls is not None and not isinstance(tool_calls, list):
+                abort(400, message="tool_calls must be a JSON array")
 
             db = service_manager.get_database()
             if not db.get_conversation(conversation_id):
@@ -67,6 +71,8 @@ class MessageListResource(MethodView):
                 role=str(role),
                 content=str(content),
                 token_count=int(token_count) if token_count is not None else None,
+                tool_calls=tool_calls,
+                tool_call_id=str(tool_call_id) if tool_call_id else None,
             )
 
             return jsonify(item.to_dict()), 201
