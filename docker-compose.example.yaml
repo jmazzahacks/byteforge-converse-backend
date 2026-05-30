@@ -2,9 +2,7 @@
 #
 # This file is a TEACHING REFERENCE, not a runnable stack. Drop the
 # `byteforge-converse-backend` service block into an existing
-# `docker-compose.yaml` that already provides Postgres on a shared network.
-# The `networks:` block at the bottom shows how to join that existing
-# network; rename `admin` to whatever your stack calls it.
+# `docker-compose.yaml` that already provides Postgres.
 #
 # Pre-flight checklist:
 #   1. Provision the DB user + schema. From the backend repo on a host that
@@ -14,13 +12,11 @@
 #      (Idempotent — safe to re-run.)
 #   2. Drop a `.env` next to your compose file (see backend/example.env for
 #      the full var list). Required vars at minimum:
-#          BYTEFORGE_CONVERSE_DB_HOST=<postgres service name on the shared net>
+#          BYTEFORGE_CONVERSE_DB_HOST=<postgres service name reachable from this container>
 #          BYTEFORGE_CONVERSE_DB_PASSWORD=<...>
 #          BYTEFORGE_CONVERSE_OPENROUTER_API_KEY=<...>
 #      If your stack puts secrets in `environment:` rather than a file, swap
 #      `env_file:` for the inline form (commented below).
-#   3. Confirm the network name below matches your admin stack's network
-#      (the one Postgres lives on).
 
 services:
   byteforge-converse-backend:
@@ -50,7 +46,7 @@ services:
 
     # The container listens on 5252. In a gatekeeper-fronted stack the
     # backend should NOT publish to the host — nginx reaches it on the
-    # shared network via `http://byteforge-converse-backend:5252`.
+    # shared compose network via `http://byteforge-converse-backend:5252`.
     # Uncomment ONLY for local debugging or stacks that don't put nginx
     # in front.
     # ports:
@@ -63,9 +59,6 @@ services:
     depends_on:
       - postgres  # rename to whatever your admin stack's Postgres service is called
 
-    networks:
-      - admin    # rename to your admin stack's shared network name
-
     # /swagger is a cheap liveness probe — it returns 200 once the Flask
     # app + blueprints are wired up. Adjust the interval to taste.
     healthcheck:
@@ -74,10 +67,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-
-networks:
-  # Join the network your admin stack already declares. `external: true`
-  # means "do not create — find by name". Remove this whole block if your
-  # admin stack uses the default `default` network.
-  admin:
-    external: true
