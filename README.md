@@ -52,7 +52,7 @@ gunicorn -w 4 -b 0.0.0.0:5252 'byteforge_converse_backend:create_app()'
 
 **LLM (OpenRouter proxy):**
 - `BYTEFORGE_CONVERSE_OPENROUTER_API_KEY` — **required** for the chat turn
-- `BYTEFORGE_CONVERSE_LLM_MODEL` — default model (default: `anthropic/claude-3.5-sonnet`); overridable per-conversation
+- `BYTEFORGE_CONVERSE_LLM_MODEL` — default model (default: `anthropic/claude-sonnet-4-5`); overridable per-conversation
 
 **Other:**
 - `ALLOWED_ORIGINS` — comma-separated CORS allow-list for embedding frontends
