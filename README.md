@@ -101,6 +101,8 @@ Run the image locally:
 docker run --rm -p 5252:5252 --env-file .env ghcr.io/jmazzahacks/byteforge-converse-backend:latest
 ```
 
+To wire the service into an existing docker-compose admin stack (Postgres already provided), see [`docker-compose.example.yaml`](./docker-compose.example.yaml) — a teaching snippet to merge into your own compose file.
+
 ## API Documentation
 
 Once running, open: `http://localhost:5252/swagger`

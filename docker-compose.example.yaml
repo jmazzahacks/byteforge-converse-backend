@@ -1,0 +1,83 @@
+# byteforge-converse-backend — docker-compose snippet
+#
+# This file is a TEACHING REFERENCE, not a runnable stack. Drop the
+# `byteforge-converse-backend` service block into an existing
+# `docker-compose.yaml` that already provides Postgres on a shared network.
+# The `networks:` block at the bottom shows how to join that existing
+# network; rename `admin` to whatever your stack calls it.
+#
+# Pre-flight checklist:
+#   1. Provision the DB user + schema. From the backend repo on a host that
+#      can reach your Postgres:
+#          source bin/activate
+#          python dev_scripts/setup_database.py --pg-password <pg_superuser_pw>
+#      (Idempotent — safe to re-run.)
+#   2. Drop a `.env` next to your compose file (see backend/example.env for
+#      the full var list). Required vars at minimum:
+#          BYTEFORGE_CONVERSE_DB_HOST=<postgres service name on the shared net>
+#          BYTEFORGE_CONVERSE_DB_PASSWORD=<...>
+#          BYTEFORGE_CONVERSE_OPENROUTER_API_KEY=<...>
+#      If your stack puts secrets in `environment:` rather than a file, swap
+#      `env_file:` for the inline form (commented below).
+#   3. Confirm the network name below matches your admin stack's network
+#      (the one Postgres lives on).
+
+services:
+  byteforge-converse-backend:
+    image: ghcr.io/jmazzahacks/byteforge-converse-backend:latest
+    # Pin a specific build in production. `latest` is fine for staging /
+    # one-VPS deployments where you control all the rollouts.
+    # image: ghcr.io/jmazzahacks/byteforge-converse-backend:2
+    restart: unless-stopped
+
+    env_file: .env
+    # Inline alternative (drop `env_file:` if you use this form):
+    # environment:
+    #   BYTEFORGE_CONVERSE_DB_HOST: postgres
+    #   BYTEFORGE_CONVERSE_DB_PORT: "5432"
+    #   BYTEFORGE_CONVERSE_DB_NAME: byteforge_converse
+    #   BYTEFORGE_CONVERSE_DB_USER: byteforge_converse
+    #   BYTEFORGE_CONVERSE_DB_PASSWORD: ${BYTEFORGE_CONVERSE_DB_PASSWORD}
+    #   BYTEFORGE_CONVERSE_OPENROUTER_API_KEY: ${BYTEFORGE_CONVERSE_OPENROUTER_API_KEY}
+    #   BYTEFORGE_CONVERSE_LLM_MODEL: anthropic/claude-3.5-sonnet
+    #   ALLOWED_ORIGINS: https://app.example.com
+    #   DEBUG_LOCAL: "false"
+    #   LOG_LEVEL: INFO
+    #   LOKI_ENDPOINT: https://loki.example.com/loki/api/v1/push
+    #   LOKI_USER: ${LOKI_USER}
+    #   LOKI_PASSWORD: ${LOKI_PASSWORD}
+    #   LOKI_CA_BUNDLE_PATH: /app/certs/loki-ca.pem
+
+    # The container listens on 5252. In a gatekeeper-fronted stack the
+    # backend should NOT publish to the host — nginx reaches it on the
+    # shared network via `http://byteforge-converse-backend:5252`.
+    # Uncomment ONLY for local debugging or stacks that don't put nginx
+    # in front.
+    # ports:
+    #   - "5252:5252"
+
+    # Mount a private CA only if your Loki uses one. Skip otherwise.
+    # volumes:
+    #   - ./certs/loki-ca.pem:/app/certs/loki-ca.pem:ro
+
+    depends_on:
+      - postgres  # rename to whatever your admin stack's Postgres service is called
+
+    networks:
+      - admin    # rename to your admin stack's shared network name
+
+    # /swagger is a cheap liveness probe — it returns 200 once the Flask
+    # app + blueprints are wired up. Adjust the interval to taste.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5252/swagger"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  # Join the network your admin stack already declares. `external: true`
+  # means "do not create — find by name". Remove this whole block if your
+  # admin stack uses the default `default` network.
+  admin:
+    external: true
