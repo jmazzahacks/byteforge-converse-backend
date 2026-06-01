@@ -7,15 +7,17 @@ Drives a real OpenRouter model through:
   1. Create conversation advertising a fake `get_weather(city)` tool.
   2. Send a user message that should force a tool call.
   3. Assert the returned ChatTurn carries a parseable `get_weather` call.
-  4. POST a fabricated tool result via /messages with the matching tool_call_id.
-  5. Send a follow-up turn (nudge text — the empty-content path is a TBD).
-  6. Assert the model's next reply references the fabricated result.
+  4. POST a fabricated tool result + drive the follow-up turn. Two paths:
+       - default (2-call):  POST /messages then POST /chat
+       - --sugar:           POST /chat/tool_result (one call)
+  5. Assert the model's next reply references the fabricated result.
 
 The script never executes the tool; ByteforgeConverse never executes the tool;
 the relay path is what we are verifying.
 
 Usage:
   python dev_scripts/test_tool_calling.py
+  python dev_scripts/test_tool_calling.py --sugar
   python dev_scripts/test_tool_calling.py --base-url http://localhost:5252
   python dev_scripts/test_tool_calling.py --user-id <stable-uuid> --keep
 """
@@ -119,12 +121,12 @@ def step_assert_tool_call(turn: ChatTurn) -> Tuple[str, dict]:
     return tc.id, parsed_args
 
 
-def step_post_tool_result(
+def step_post_tool_result_two_call(
     client: ConverseClient,
     conversation_id: str,
     tool_call_id: str,
-) -> None:
-    print(f"Step 4 - POST fake tool result for tool_call_id={tool_call_id}")
+) -> ChatTurn:
+    print(f"Step 4 - POST fake tool result via /messages (tool_call_id={tool_call_id})")
     msg = client.post_message(conversation_id, {
         "role": "tool",
         "content": FAKE_TOOL_RESULT,
@@ -132,17 +134,27 @@ def step_post_tool_result(
     })
     print(f"  OK tool message persisted (id={msg.id})")
 
-
-def step_follow_up_turn(client: ConverseClient, conversation_id: str) -> ChatTurn:
-    print(f"Step 5 - user: {FOLLOW_UP_PROMPT!r}")
+    print(f"Step 5 - drive follow-up via /chat with nudge {FOLLOW_UP_PROMPT!r}")
     turn = client.chat(conversation_id, FOLLOW_UP_PROMPT)
     content = turn.message.content or ""
     print(f"  OK assistant reply: {content!r}")
     return turn
 
 
+def step_post_tool_result_sugar(
+    client: ConverseClient,
+    conversation_id: str,
+    tool_call_id: str,
+) -> ChatTurn:
+    print(f"Step 4 - POST tool result + drive follow-up via /chat/tool_result (tool_call_id={tool_call_id})")
+    turn = client.chat_tool_result(conversation_id, tool_call_id, FAKE_TOOL_RESULT)
+    content = turn.message.content or ""
+    print(f"  OK assistant reply: {content!r}")
+    return turn
+
+
 def step_assert_summary(turn: ChatTurn) -> None:
-    print("Step 6 - assert reply references the fabricated tool result")
+    print("Step 5 - assert reply references the fabricated tool result")
     content = (turn.message.content or "").lower()
     matched = [m for m in EXPECTED_REPLY_MARKERS if m in content]
     if not matched:
@@ -181,11 +193,17 @@ def main() -> None:
         action="store_true",
         help="Skip deleting the conversation at the end (useful for post-mortem inspection)",
     )
+    parser.add_argument(
+        "--sugar",
+        action="store_true",
+        help="Use POST /chat/tool_result (single call) instead of /messages + /chat (two calls)",
+    )
     args = parser.parse_args()
 
     user_id = args.user_id or str(uuid.uuid4())
     print(f"Target:  {args.base_url}")
     print(f"User id: {user_id}")
+    print(f"Mode:    {'sugar' if args.sugar else '2-call'}")
     print()
 
     client = ConverseClient(
@@ -198,8 +216,10 @@ def main() -> None:
         conversation_id = step_create_conversation(client)
         turn1 = step_send_user_message(client, conversation_id)
         tool_call_id, _ = step_assert_tool_call(turn1)
-        step_post_tool_result(client, conversation_id, tool_call_id)
-        turn2 = step_follow_up_turn(client, conversation_id)
+        if args.sugar:
+            turn2 = step_post_tool_result_sugar(client, conversation_id, tool_call_id)
+        else:
+            turn2 = step_post_tool_result_two_call(client, conversation_id, tool_call_id)
         step_assert_summary(turn2)
         print()
         print("PASS: tool-call relay verified end-to-end.")
