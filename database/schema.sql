@@ -90,9 +90,13 @@ BEGIN
     END IF;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_messages_conversation_id            ON messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_created_at ON messages(conversation_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_messages_conversation_replay         ON messages(conversation_id, created_at, seq);
+-- One index serves every messages lookup: by conversation (incl. the FK
+-- cascade from conversations), and history replay ordered by (created_at,
+-- seq). The older (conversation_id) and (conversation_id, created_at)
+-- indexes are strict prefixes of it and are dropped (athena, 2026-09-27).
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_replay ON messages(conversation_id, created_at, seq);
+DROP INDEX IF EXISTS idx_messages_conversation_id;
+DROP INDEX IF EXISTS idx_messages_conversation_id_created_at;
 
 COMMENT ON TABLE  messages              IS 'A single message within a conversation';
 COMMENT ON COLUMN messages.role         IS 'One of: user, assistant, system, tool';
