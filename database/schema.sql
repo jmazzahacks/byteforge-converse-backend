@@ -73,8 +73,10 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS tool_call_id TEXT;
 -- Insertion order. created_at is epoch seconds and a chat turn writes several
 -- rows within one second; history is replayed ORDER BY created_at, seq so a
 -- tie can never put an assistant row last or a tool result before its call.
--- Rows that predate the column are numbered in physical order when it is
--- added; created_at still orders them correctly across seconds.
+-- Rows that predate the column (production: the first 56, added 2026-09-27)
+-- were numbered in PHYSICAL heap order, not write order, and one conversation
+-- is visibly shuffled. Never order by seq alone; it is only a tiebreaker
+-- within one created_at second, and those old rows have no such ties.
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS seq BIGSERIAL NOT NULL;
 
 DO $$
@@ -98,7 +100,7 @@ COMMENT ON COLUMN messages.token_count  IS 'Tokens consumed by this message, if 
 COMMENT ON COLUMN messages.tool_calls   IS 'Raw OpenAI/OpenRouter tool-call list emitted by the assistant on this turn (NULL on non-assistant rows or assistant rows that emitted no tools)';
 COMMENT ON COLUMN messages.tool_call_id IS 'For tool-role rows, the assistant tool_call id this row responds to';
 COMMENT ON COLUMN messages.created_at   IS 'Unix timestamp (epoch seconds) of creation';
-COMMENT ON COLUMN messages.seq          IS 'Insertion order; tiebreaker for rows created in the same second when replaying history';
+COMMENT ON COLUMN messages.seq          IS 'Tiebreaker for rows created in the same second when replaying history: insertion order for rows written after the column was added, physical order for older rows. Never order by seq alone.';
 
 -- sessions: short-lived frontend handshake records.
 -- conversation_id may be NULL until the user starts a chat.
