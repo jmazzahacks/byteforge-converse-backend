@@ -3,7 +3,7 @@
 Database setup script for ByteforgeConverse.
 
 Creates the byteforge_converse database and user, grants permissions, and
-applies database/schema.sql.
+applies the canonical schema packaged in byteforge-converse-core.
 
 Environment variables (loaded from .env in the backend repo root):
   BYTEFORGE_CONVERSE_DB_HOST          PostgreSQL host (default: localhost) — same var the app uses
@@ -20,13 +20,19 @@ Usage:
 import os
 import sys
 import argparse
+import logging
+
+from byteforge_converse_core.schema import apply_schema
 
 import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from psycopg2.extras import RealDictCursor
+from psycopg2 import sql
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     load_dotenv()
 
     parser = argparse.ArgumentParser(description="Setup ByteforgeConverse database")
@@ -52,11 +58,13 @@ def main() -> None:
     app_password = os.environ.get("BYTEFORGE_CONVERSE_DB_PASSWORD")
 
     if app_password is None:
-        print("Error: BYTEFORGE_CONVERSE_DB_PASSWORD environment variable is required")
+        logging.error(
+            "Error: BYTEFORGE_CONVERSE_DB_PASSWORD environment variable is required"
+        )
         sys.exit(1)
 
-    print(f"Setting up database '{app_db}' and user '{app_user}'...")
-    print(f"Connecting to PostgreSQL at {pg_host}:{pg_port} as {pg_user}")
+    logging.info(f"Setting up database '{app_db}' and user '{app_user}'...")
+    logging.info(f"Connecting to PostgreSQL at {pg_host}:{pg_port} as {pg_user}")
 
     try:
         conn = psycopg2.connect(
@@ -68,30 +76,43 @@ def main() -> None:
         )
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (app_user,))
             if not cursor.fetchone():
-                print(f"Creating user '{app_user}'...")
-                cursor.execute(f'CREATE USER "{app_user}" WITH PASSWORD %s', (app_password,))
-                print(f"✓ User '{app_user}' created")
+                logging.info(f"Creating user '{app_user}'...")
+                cursor.execute(
+                    sql.SQL("CREATE USER {} WITH PASSWORD %s").format(
+                        sql.Identifier(app_user)
+                    ),
+                    (app_password,),
+                )
+                logging.info(f"✓ User '{app_user}' created")
             else:
-                print(f"✓ User '{app_user}' already exists")
+                logging.info(f"✓ User '{app_user}' already exists")
 
             cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (app_db,))
             if not cursor.fetchone():
-                print(f"Creating database '{app_db}'...")
-                cursor.execute(f'CREATE DATABASE "{app_db}" OWNER "{app_user}"')
-                print(f"✓ Database '{app_db}' created")
+                logging.info(f"Creating database '{app_db}'...")
+                cursor.execute(
+                    sql.SQL(
+                        "CREATE DATABASE {} OWNER {} ENCODING 'UTF8' TEMPLATE template0"
+                    ).format(sql.Identifier(app_db), sql.Identifier(app_user))
+                )
+                logging.info(f"✓ Database '{app_db}' created")
             else:
-                print(f"✓ Database '{app_db}' already exists")
+                logging.info(f"✓ Database '{app_db}' already exists")
 
-            print("Setting permissions...")
-            cursor.execute(f'GRANT ALL PRIVILEGES ON DATABASE "{app_db}" TO "{app_user}"')
-            print(f"✓ Granted all privileges on '{app_db}' to '{app_user}'")
+            logging.info("Setting permissions...")
+            cursor.execute(
+                sql.SQL("GRANT ALL PRIVILEGES ON DATABASE {} TO {}").format(
+                    sql.Identifier(app_db), sql.Identifier(app_user)
+                )
+            )
+            logging.info(f"✓ Granted all privileges on '{app_db}' to '{app_user}'")
 
         conn.close()
 
-        print(f"\nConnecting as '{app_user}' to apply schema...")
+        logging.info(f"\nConnecting as '{app_user}' to apply schema...")
         app_conn = psycopg2.connect(
             host=pg_host,
             port=pg_port,
@@ -99,35 +120,22 @@ def main() -> None:
             user=app_user,
             password=app_password,
         )
-        app_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-
-        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        schema_path = os.path.join(repo_root, "database", "schema.sql")
-        if not os.path.exists(schema_path):
-            print(f"Error: schema file not found at {schema_path}")
-            sys.exit(1)
-
-        with open(schema_path, "r", encoding="utf-8") as f:
-            schema_sql = f.read()
-
-        with app_conn.cursor() as cursor:
-            print("Ensuring required extensions...")
-            cursor.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
-            print(f"Applying schema from {schema_path}...")
-            cursor.execute(schema_sql)
-            print("✓ Schema applied")
+        app_conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_READ_COMMITTED)
+        with app_conn:
+            logging.info("Applying packaged Converse schema...")
+            apply_schema(app_conn)
 
         app_conn.close()
-        print("✓ Database setup complete")
-        print(f"  Database: {app_db}")
-        print(f"  User:     {app_user}")
-        print(f"  Host:     {pg_host}:{pg_port}")
+        logging.info("✓ Database setup complete")
+        logging.info(f"  Database: {app_db}")
+        logging.info(f"  User:     {app_user}")
+        logging.info(f"  Host:     {pg_host}:{pg_port}")
 
     except psycopg2.Error as e:
-        print(f"Error: {e}")
+        logging.error(f"Error: {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        logging.error(f"Unexpected error: {e}")
         sys.exit(1)
 
 

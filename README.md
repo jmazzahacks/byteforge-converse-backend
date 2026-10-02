@@ -59,7 +59,7 @@ gunicorn -w 4 -b 0.0.0.0:5252 'byteforge_converse_backend:create_app()'
 
 ## Database Setup
 
-Schema lives in `database/schema.sql`. The bootstrap script creates the role, database, and applies the schema:
+The canonical schema and additive upgrades are installed with `byteforge-converse-core >= 0.9.0` (`byteforge_converse_core.schema`). `database/schema.sql` is a fail-fast pointer for old tooling, not a second schema copy. Upgrade core before using this setup script. The bootstrap script creates the role, database, and applies the schema:
 
 ```bash
 source bin/activate
